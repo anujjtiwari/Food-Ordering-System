@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection, query, addDoc, updateDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { ShoppingCart, ChefHat, BellRing, Utensils, IndianRupee, X, Check, Soup, ChevronUp, ChevronDown } from 'lucide-react';
+import './App.css'; // Add App.css import so theme rules are loaded
 
 // --- Global Variable Handling ---
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
@@ -28,6 +29,7 @@ const INGREDIENTS = {
     ],
     SAUCES_AND_TOPPINGS: [
         { id: 'cheese', name: 'Cheese (Extra)', price: 15, default: false },
+        { id: 'paneer', name: 'Add Paneer', price: 20, default: false }, // added paneer option (+20 INR)
         { id: 'red-ketchup', name: 'Red Ketchup', price: 0, default: true },
         { id: 'schezwan', name: 'Schezwan Chutney', price: 0, default: true },
         { id: 'mayonnaise', name: 'Mayonnaise', price: 10, default: false }, // Optional paid
@@ -40,12 +42,10 @@ const ALL_INGREDIENTS_FLAT = Object.values(INGREDIENTS).flat();
 const DEFAULT_INGREDIENT_IDS = ALL_INGREDIENTS_FLAT.filter(i => i.default).map(i => i.id);
 
 const MENU_ITEMS = [
-    { id: 'frankie-veg', name: 'Veg Frankie', price: 60, category: 'Rolls', customizable: true },
-    { id: 'frankie-paneer', name: 'Paneer Frankie', price: 80, category: 'Rolls', customizable: true },
-    { id: 'bhel', name: 'Bhel Puri', price: 40, category: 'Chaat', customizable: false },
-    { id: 'mix-chips', name: 'Mix Chips (Large)', price: 30, category: 'Snacks', customizable: false },
-    { id: 'panipuri', name: 'Pani Puri (6 pcs)', price: 50, category: 'Chaat', customizable: false },
-];
+    { id: 'frankie', name: 'Frankie', price: 60, category: 'Rolls', customizable: true }, // combined Frankie; paneer available in customizer (+20 INR)
+    { id: 'bhel', name: 'Bhel Puri', price: 30, category: 'Chaat', customizable: false },
+    { id: 'mix-chips', name: 'Mix Chips (Large)', price: 40, category: 'Snacks', customizable: true },
+]
 
 const OrderStatus = {
     NEW: 'New Order',
@@ -251,44 +251,95 @@ const CustomerView = ({ db, userId, orderCollectionPath }) => {
 
     const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + (item.unitPrice || item.price) * item.quantity, 0), [cart]);
 
-    // 2. Place Order (Simulated Payment Success)
+    // 2. Place Order (MODIFIED with Razorpay)
     const handlePlaceOrder = async () => {
         if (cart.length === 0 || cartTotal === 0) return;
 
         setIsPlacingOrder(true);
 
-        try {
-            const simplifiedCart = cart.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: item.unitPrice || item.price,
-                customizations: item.customizations || null,
-                notes: item.notes || null, // Future use for special notes
-            }));
-
-            const newOrder = {
-                userId: userId,
-                items: simplifiedCart,
-                total: cartTotal,
-                status: OrderStatus.NEW,
-                timestamp: serverTimestamp(),
-                orderId: Math.floor(Math.random() * 900) + 100, // Simple 3-digit number for display
-            };
-
-            // Simulate payment processing time (e.g., UPI payment success)
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            const docRef = await addDoc(collection(db, orderCollectionPath), newOrder);
-            setLastPlacedOrderId(docRef.id);
-            setCurrentOrderStatus(OrderStatus.NEW);
-            setCart([]); // Clear cart after successful order
-        } catch (error) {
-            console.error("Error placing order:", error);
-            // Custom modal replacement for alert
-            alert("There was an error processing your order. Please try again.");
-        } finally {
+        // Check if Razorpay script is loaded
+        if (!window.Razorpay) {
+            alert('Error: Payment gateway is not loaded. Please refresh the page.');
             setIsPlacingOrder(false);
+            return;
         }
+        
+        const options = {
+            // ===================================================================
+            // !!! IMPORTANT !!!
+            // This is a PUBLIC TEST KEY.
+            // You MUST replace this with your own Key ID from the Razorpay Dashboard.
+            key: 'rzp_test_R8Pjr1V054idbz', 
+            // ===================================================================
+            amount: cartTotal * 100 , // Amount in paise (e.g., 50.00 INR = 5000 paise)
+            currency: 'INR',
+            name: 'Mamba Foods', // Your business name
+            description: 'Stall Order Payment',
+            // image: 'src/assets/logo.png', // You can add your logo URL here
+            
+            handler: async (response) => {
+                // This function is called on successful payment
+                try {
+                    const simplifiedCart = cart.map(item => ({
+                        name: item.name,
+                        quantity: item.quantity,
+                        price: item.unitPrice || item.price,
+                        customizations: item.customizations || null,
+                        notes: item.notes || null,
+                    }));
+
+                    const newOrder = {
+                        userId: userId,
+                        items: simplifiedCart,
+                        total: cartTotal,
+                        status: OrderStatus.NEW,
+                        timestamp: serverTimestamp(),
+                        orderId: Math.floor(Math.random() * 900) + 100, // Simple 3-digit number for display
+                        paymentId: response.razorpay_payment_id, // Store the payment ID from Razorpay
+                    };
+
+                    const docRef = await addDoc(collection(db, orderCollectionPath), newOrder);
+                    setLastPlacedOrderId(docRef.id);
+                    setCurrentOrderStatus(OrderStatus.NEW);
+                    setCart([]); // Clear cart after successful order
+                
+                } catch (error) {
+                    console.error("Error saving order after payment:", error);
+                    alert("Payment was successful, but there was an error saving your order. Please contact staff immediately.");
+                } finally {
+                    // This finally block runs after the 'try' or 'catch' inside the handler
+                    // We set placing order to false here because the payment process is complete.
+                    setIsPlacingOrder(false);
+                }
+            },
+            prefill: {
+                // You can prefill customer details if you collect them
+                name: 'IIT-GN Customer', 
+                email: '',
+                contact: ''
+            },
+            notes: {
+                address: 'IIT Gandhinagar Campus'
+            },
+            theme: {
+                color: '#4F46E5' // Indigo color to match your theme
+            }
+        };
+
+        const rzp = new window.Razorpay(options);
+
+        rzp.on('payment.failed', (response) => {
+            console.error('Payment Failed:', response.error);
+            alert(`Payment failed. Reason: ${response.error.description || 'Unknown'}. Please try again.`);
+            // Re-enable the button if payment fails
+            setIsPlacingOrder(false);
+        });
+
+        // Open the Razorpay checkout modal
+        // The 'finally' block in the main function is removed, 
+        // as setIsPlacingOrder(false) is now handled by the 'handler' (on success) 
+        // and 'payment.failed' (on failure).
+        rzp.open();
     };
 
     // --- RENDERING ---
@@ -346,27 +397,28 @@ const CustomerView = ({ db, userId, orderCollectionPath }) => {
     // Menu and Cart Screen (Initial state)
     return (
         <div className="p-4 pb-28 bg-gray-50 min-h-screen">
-            <div className="max-w-md mx-auto">
-                <header className="py-4 text-center">
-                    <Utensils className="w-8 h-8 mx-auto text-indigo-600" />
-                    <h1 className="text-3xl font-extrabold text-gray-900 mt-2">MAMBA FOODS</h1>
-                    <p className="text-sm text-gray-500">Fast ordering via QR Code. Payment simulated.</p>
+            <div className="max-w-2xl mx-auto">
+                <header className="app-header">
+                    <img
+                        src="src\assets\logo.png"
+                        alt="Mamba Foods Logo"
+                        className="app-logo"
+                    />
                 </header>
 
                 {/* Menu Items */}
                 <section className="space-y-4">
                     <h2 className="text-xl font-bold text-gray-700 mt-4 mb-2">Our Menu</h2>
                     {MENU_ITEMS.map(item => (
-                        <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-md border border-gray-100">
-                            <div>
-                                <p className="font-semibold text-lg text-gray-800">{item.name}</p>
-                                <p className="text-sm text-indigo-600 font-medium">{formatPrice(item.price)}
-                                    {item.customizable && <span className="text-xs text-gray-500 ml-2">(Customize)</span>}</p>
+                        <div key={item.id} className="menu-item">
+                            <div className="left">
+                                <p className="name">{item.name}</p>
+                                <p className="price">
+                                    {formatPrice(item.price)}
+                                    {item.customizable && <span className="customize">(Customize)</span>}
+                                </p>
                             </div>
-                            <button
-                                onClick={() => handleMenuClick(item)}
-                                className="bg-indigo-500 hover:bg-indigo-600 text-white p-2 rounded-lg text-sm font-bold shadow-md transition duration-300 transform active:scale-95"
-                            >
+                            <button onClick={() => handleMenuClick(item)} className="add-button">
                                 Add
                             </button>
                         </div>
@@ -375,65 +427,67 @@ const CustomerView = ({ db, userId, orderCollectionPath }) => {
 
                 {/* Floating Cart Summary */}
                 <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-4 border-indigo-600 shadow-2xl">
-                    <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center">
-                        <ShoppingCart className="w-5 h-5 mr-2 text-indigo-600" />
-                        Your Cart
-                    </h2>
-                    {cart.length === 0 ? (
-                        <p className="text-sm text-gray-500">Your cart is empty. Add some items!</p>
-                    ) : (
-                        <>
-                            {cart.map(item => (
-                                <div key={item.id} className="flex justify-between items-start py-2 border-b border-gray-100 last:border-b-0">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-gray-700">{item.name}</p>
-                                        {item.customizations && (
-                                            <p className="text-xs text-gray-500 italic truncate ml-1">
-                                                Custom: {item.customizations.map(id => ALL_INGREDIENTS_FLAT.find(i => i.id === id)?.name).join(', ')}
-                                            </p>
-                                        )}
-                                    </div>
+                    <div className="cart-panel">
+                        <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                            <ShoppingCart className="w-5 h-5 mr-2 text-indigo-600" />
+                            Your Cart
+                        </h2>
+                        {cart.length === 0 ? (
+                            <p className="text-sm text-gray-500">Your cart is empty. Add some items!</p>
+                        ) : (
+                            <>
+                                {cart.map(item => (
+                                    <div key={item.id} className="flex justify-between items-start py-2 border-b border-gray-100 last:border-b-0">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-700">{item.name}</p>
+                                            {item.customizations && (
+                                                <p className="text-xs text-gray-500 italic truncate ml-1">
+                                                    Custom: {item.customizations.map(id => ALL_INGREDIENTS_FLAT.find(i => i.id === id)?.name).join(', ')}
+                                                </p>
+                                            )}
+                                        </div>
 
-                                    <div className="flex items-center space-x-2 ml-4">
-                                        {/* For non-customizable items, allow quantity change. Customized items should be removed and re-added */}
-                                        {!item.customizable ? (
-                                            <>
-                                                <button onClick={() => updateCartItemQuantity(item.id, -1)} className="text-indigo-500 hover:text-indigo-700 p-1">
-                                                    -
-                                                </button>
+                                        <div className="flex items-center space-x-2 ml-4">
+                                            {/* For non-customizable items, allow quantity change. Customized items should be removed and re-added */}
+                                            {!item.customizable ? (
+                                                <>
+                                                    <button onClick={() => updateCartItemQuantity(item.id, -1)} className="text-indigo-500 hover:text-indigo-700 p-1">
+                                                        -
+                                                    </button>
+                                                    <span className="font-bold text-gray-800 w-4 text-center">{item.quantity}</span>
+                                                    <button onClick={() => updateCartItemQuantity(item.id, 1)} className="text-indigo-500 hover:text-indigo-700 p-1">
+                                                        +
+                                                    </button>
+                                                </>
+                                            ) : (
                                                 <span className="font-bold text-gray-800 w-4 text-center">{item.quantity}</span>
-                                                <button onClick={() => updateCartItemQuantity(item.id, 1)} className="text-indigo-500 hover:text-indigo-700 p-1">
-                                                    +
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <span className="font-bold text-gray-800 w-4 text-center">{item.quantity}</span>
-                                        )}
+                                            )}
 
-                                        <span className="text-sm text-gray-500 ml-4">{formatPrice((item.unitPrice || item.price) * item.quantity)}</span>
-                                        <button onClick={() => removeCartItem(item.id)} className="text-red-500 hover:text-red-700 p-1">
-                                            <X className="w-4 h-4" />
-                                        </button>
+                                            <span className="text-sm text-gray-500 ml-4">{formatPrice((item.unitPrice || item.price) * item.quantity)}</span>
+                                            <button onClick={() => removeCartItem(item.id)} className="text-red-500 hover:text-red-700 p-1">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
+                                ))}
+                                <div className="flex justify-between items-center pt-3 mt-3 border-t-2 border-gray-200">
+                                    <span className="text-lg font-bold text-gray-800">Total:</span>
+                                    <span className="text-xl font-extrabold text-indigo-600">{formatPrice(cartTotal)}</span>
                                 </div>
-                            ))}
-                            <div className="flex justify-between items-center pt-3 mt-3 border-t-2 border-gray-200">
-                                <span className="text-lg font-bold text-gray-800">Total:</span>
-                                <span className="text-xl font-extrabold text-indigo-600">{formatPrice(cartTotal)}</span>
-                            </div>
-                            <button
-                                onClick={handlePlaceOrder}
-                                disabled={cart.length === 0 || isPlacingOrder}
-                                className={`mt-4 w-full py-3 rounded-xl font-bold transition duration-300 shadow-lg ${
-                                    cart.length === 0 || isPlacingOrder
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-green-500 hover:bg-green-600 text-white transform active:scale-95'
-                                }`}
-                            >
-                                {isPlacingOrder ? 'Processing Payment...' : `Confirm & Pay ${formatPrice(cartTotal)}`}
-                            </button>
-                        </>
-                    )}
+                                <button
+                                    onClick={handlePlaceOrder}
+                                    disabled={cart.length === 0 || isPlacingOrder}
+                                    className={`mt-4 w-full py-3 rounded-xl font-bold transition duration-300 shadow-lg ${
+                                        cart.length === 0 || isPlacingOrder
+                                            ? 'bg-gray-400 cursor-not-allowed'
+                                            : 'bg-green-500 hover:bg-green-600 text-white transform active:scale-95'
+                                    }`}
+                                >
+                                    {isPlacingOrder ? 'Processing Payment...' : `Confirm & Pay ${formatPrice(cartTotal)}`}
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -622,7 +676,9 @@ const App = () => {
     const [db, setDb] = useState(null);
     const [userId, setUserId] = useState(null);
     const [view, setView] = useState('customer'); // 'customer' or 'stall'
+    const [isStaffAuthenticated, setIsStaffAuthenticated] = useState(false);
     const [authReady, setAuthReady] = useState(false);
+    const STAFF_PASSWORD = 'mamba123'; // centralize password
 
     // Firestore path for orders
     const orderCollectionPath = useMemo(() => `/artifacts/${appId}/public/data/orders`, [appId]);
@@ -674,7 +730,8 @@ const App = () => {
 
         if (viewParam === 'stall') {
             const entered = prompt("🔐 Enter staff access password:");
-            if (entered === "mamba123") {
+            if (entered === STAFF_PASSWORD) {
+                setIsStaffAuthenticated(true);
                 setView('stall');
             } else {
                 alert("❌ Access denied.");
@@ -682,9 +739,6 @@ const App = () => {
             }
         }
     }, []);
-
-
-
 
     if (!authReady) {
         return (
@@ -703,16 +757,28 @@ const App = () => {
             {/* View Toggle (Only visible if the user is not in the stall view and for easy testing) */}
             {view === 'customer' && (
                 <button
-                    onClick={() => setView('stall')}
-                    className="fixed bottom-2 right-2 z-50 p-2 bg-pink-500 text-white rounded-full shadow-lg text-xs"
+                    onClick={() => {
+                        const entered = prompt("🔐 Enter staff access password:");
+                        if (entered === STAFF_PASSWORD) {
+                            setIsStaffAuthenticated(true);
+                            setView('stall');
+                        } else {
+                            alert("❌ Access denied.");
+                        }
+                    }}
+                    className="fixed bottom-2 right-2 z-50 p-2 bg-green-500 text-black rounded-full shadow-lg text-xs hover:bg-green-600"
                     title="Switch to Staff View"
                 >
                     Staff KDS
                 </button>
             )}
-            {view === 'stall' && (
+             {view === 'stall' && (
                 <button
-                    onClick={() => setView('customer')}
+                    onClick={() => {
+                        // log out staff on switching back
+                        setIsStaffAuthenticated(false);
+                        setView('customer');
+                    }}
                     className="fixed top-2 right-2 z-50 p-2 bg-pink-500 text-white rounded-full shadow-lg text-xs"
                     title="Switch to Customer View"
                 >
@@ -723,7 +789,13 @@ const App = () => {
             {view === 'customer' ? (
                 <CustomerView db={db} userId={userId} orderCollectionPath={orderCollectionPath} />
             ) : (
-                <StallView db={db} orderCollectionPath={orderCollectionPath} />
+                // ensure stall view only shown when authenticated
+                isStaffAuthenticated ? (
+                    <StallView db={db} orderCollectionPath={orderCollectionPath} />
+                ) : (
+                    // fallback to customer if someone tries to set view without auth
+                    <CustomerView db={db} userId={userId} orderCollectionPath={orderCollectionPath} />
+                )
             )}
         </div>
     );

@@ -1,10 +1,27 @@
+/* Black + Green (#2BA116) theme: centralized, accessible, not flashy */
+
+/* Theme variables */
+:root {
+  --brand: #2BA116;
+  --bg: #050505;       /* page background */
+  --panel: #0f0f0f;    /* card / panel background */
+  --muted: #cfead1;    /* primary text on dark */
+  --muted-2: #9fcf9a;  /* secondary text */
+  --border: rgba(255,255,255,0.04);
+  --shadow: rgba(0,0,0,0.7);
+}
+
+/* Base layout */
 #root {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  background: var(--bg);
+  color: var(--muted);
 }
 
+/* Logos */
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -12,31 +29,279 @@
   transition: filter 300ms;
 }
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+  filter: drop-shadow(0 0 1.2em rgba(43,161,22,0.18));
 }
 .logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  filter: drop-shadow(0 0 1.2em rgba(43,161,22,0.18));
 }
 
 @keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
-
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
     animation: logo-spin infinite 20s linear;
   }
 }
 
+/* Card spacing */
 .card {
   padding: 2em;
 }
 
+/* Read docs */
 .read-the-docs {
-  color: #888;
+  color: var(--muted-2);
+}
+
+/* Panels and backgrounds: map light utilities to dark panels */
+.bg-white,
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-200 {
+  background-color: var(--panel) !important;
+  color: var(--muted) !important;
+}
+
+/* Page and section backgrounds */
+.bg-gray-50 { background: transparent !important; }
+
+/* Border tone for dark theme */
+.border-gray-100,
+.border-gray-200,
+.border-gray-300 {
+  border-color: var(--border) !important;
+}
+
+/* Text color mapping */
+.text-gray-900,
+.text-gray-800,
+.text-gray-700,
+.text-gray-600,
+.text-gray-500,
+.text-gray-400 {
+  color: var(--muted) !important;
+}
+
+/* Brand accents: replace indigo/green/pink utilities to use brand */
+.bg-indigo-500,
+.bg-indigo-600,
+.bg-green-500,
+.bg-green-600,
+.bg-pink-500,
+.border-indigo-600,
+.border-indigo-500 {
+  /* brand backgrounds/panels should force high-contrast black text */
+  background-color: var(--brand) !important;
+  color: #000 !important;
+  border-color: var(--brand) !important;
+}
+
+/* text utilities should not use !important so background rules can set contrast.
+   Keep them as green accents where appropriate (icons/labels), but allow
+   background classes to override color for legibility. */
+.text-indigo-600,
+.text-green-600 {
+  color: var(--brand);
+}
+
+/* Hover variants (tailwind-style class strings may include escape sequences in JSX) */
+.hover\:bg-indigo-600:hover,
+.hover\:bg-indigo-700:hover,
+.hover\:bg-green-600:hover {
+  /* explicit slightly darker brand for hover */
+  background-color: rgba(33,136,19,0.95) !important;
+}
+
+/* Replace other alert colors with toned brand treatment (subtle) */
+.bg-yellow-500,
+.text-yellow-600,
+.bg-red-500,
+.text-red-600 {
+  color: var(--muted) !important;
+  background-color: rgba(43,161,22,0.06) !important;
+  border-color: rgba(43,161,22,0.08) !important;
+}
+
+/* Status badges & highlights */
+.text-white {
+  color: #fff !important;
+}
+
+/* Icon color mappings */
+.text-indigo-600,
+.w-5.text-indigo-600,
+.w-8.text-indigo-600 {
+  color: var(--brand) !important;
+}
+
+/* Shadows tuned for dark theme */
+.shadow-2xl,
+.shadow-lg,
+.shadow-md {
+  box-shadow: 0 10px 30px var(--shadow) !important;
+}
+
+/* Button tweaks: ensure good contrast and subtle radius */
+button,
+.btn {
+  border-radius: 0.75rem;
+  transition: background-color 160ms ease, transform 80ms ease;
+}
+
+/* Make sure links and buttons inherit readable colors */
+a, button { color: inherit; }
+
+/* Helper: ensure cart/footer stays readable */
+.fixed.bottom-0.left-0.right-0.p-4 {
+  background: linear-gradient(180deg, rgba(15,15,15,0.7), var(--panel)) !important;
+  border-top-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Accessibility: larger hit areas for small controls */
+button[title], .fixed button {
+  padding: 0.5rem 0.75rem;
+}
+
+/* Small utility to slightly dim low-importance text */
+.text-xs { color: var(--muted-2) !important; }
+
+ /* Cart panel: left-align contents and constrain width for neat layout */
+.cart-panel {
+  text-align: left;
+  max-width: 720px;
+  margin: 0 auto;
+  display: block;
+  padding: 0; /* inner padding handled by parent fixed container */
+}
+
+/* Ensure headings inside the cart are left-aligned */
+.cart-panel h2,
+.cart-panel p,
+.cart-panel .flex,
+.cart-panel .text-sm {
+  text-align: left !important;
+}
+
+/* Slight spacing tweak for each cart item to look tidy on dark panels */
+.cart-panel .flex.justify-between.items-start {
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Header / logo fixes to prevent image from misaligning layout */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.app-logo {
+  height: 160px;            /* increased logo height */
+  width: auto;
+  max-width: 380px;         /* allow larger logos on wide screens */
+  object-fit: contain;
+  display: block;
+  margin: 0;
+}
+
+/* Title block to keep text left-aligned next to logo on wide screens, stacked on small screens */
+.app-header .title {
+  text-align: left;
+  line-height: 1;
+}
+.app-header .title h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+.app-header .title p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted-2);
+}
+
+/* Menu item: left-aligned content with right-side Add button */
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background-color: var(--panel) !important;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+}
+
+/* Left column inside menu item - name and price stacked and left aligned */
+.menu-item .left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+/* Name and price styles */
+.menu-item .name {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 1.125rem; /* 18px */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-item .price {
+  color: var(--brand);
+  font-weight: 700;
+  margin-top: 0.15rem;
+  font-size: 0.95rem;
+}
+.menu-item .customize {
+  color: var(--muted-2);
+  font-weight: 500;
+  font-size: 0.85rem;
+  margin-left: 0.45rem;
+}
+
+/* Add button: brand green background, black text, consistent size */
+.add-button {
+  background: var(--brand);
+  color: #000;
+  border: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(43,161,22,0.14);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure Add button hover slightly darker */
+.add-button:hover { background: rgba(33,136,19,0.98); }
+
+/* Responsive tweak: stack on very small screens */
+@media (max-width: 520px) {
+  .menu-item { flex-direction: column; align-items: stretch; }
+  .menu-item .left { margin-bottom: 0.5rem; }
+  .add-button { align-self: flex-end; }
+}
+
+/* Stacked layout on small viewports */
+@media (max-width: 420px) {
+  .app-header {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .app-header .title { text-align:center; }
+  .app-logo { height: 88px; max-width: 260px; }
 }
